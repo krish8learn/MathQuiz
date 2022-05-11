@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 type QuesAns struct {
@@ -16,6 +17,10 @@ type QuesAns struct {
 func main() {
 	//set what kind of file we are looking for with usage
 	csvFile := flag.String("csv", "questions.csv", "a csv file contain'question and answer'")
+
+	//receive time limit from user
+	timeLimit := flag.Int("time", 30, "Application will wait for a limited time duration")
+
 	flag.Parse()
 
 	//open file
@@ -34,8 +39,11 @@ func main() {
 	//divide questions and answers
 	qa := GetQuestionsAnswers(lines)
 
+	//start timer
+	timer := time.NewTimer(time.Second * time.Duration(*timeLimit))
+
 	//perform quiz, show results
-	fmt.Println(ShowQuesCalcAns(qa))
+	fmt.Println(ShowQuesCalcAns(qa, *timer))
 }
 
 func exit(message string) {
@@ -56,17 +64,26 @@ func GetQuestionsAnswers(lines [][]string) []QuesAns {
 	return qa
 }
 
-func ShowQuesCalcAns(qa []QuesAns) string {
-
+func ShowQuesCalcAns(qa []QuesAns, timeLimit time.Timer) string {
 	correct := 0
 
 	for index, value := range qa {
 		fmt.Printf("Question: %d --> %s =\n", index+1, value.question)
-		var userAnswer string
-		fmt.Scanf("%s\n", &userAnswer)
-		if userAnswer == value.answer {
-			correct++
+		answerChan := make(chan string)
+		go func() {
+			var userAnswer string
+			fmt.Scanf("%s\n", &userAnswer)
+			answerChan <- userAnswer
+		}()
+		select {
+		case <-timeLimit.C:
+			return fmt.Sprintf("\nRan out of time,Correct Answers: %d out of total Attempt %d of total questions %d", correct, index+1, len(qa))
+		case userAnswer := <-answerChan:
+			if userAnswer == value.answer {
+				correct++
+			}
 		}
+
 	}
 	return fmt.Sprintf("Correct Answers: %d out of total %d", correct, len(qa))
 }
